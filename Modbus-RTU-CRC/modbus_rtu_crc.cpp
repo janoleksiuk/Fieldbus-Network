@@ -3,15 +3,14 @@
 #include <vector>
 #include <iomanip>
 #include <chrono>
-#include <cctype>
+#include <cstdint>
+
 using namespace std;
 
-// --------------------------------------------------------------
-// Funkcja obliczająca CRC Modbus RTU (tabelaryczna wersja)
-// --------------------------------------------------------------
-unsigned short CRC(unsigned char *pMessage, unsigned int NumberOfBytes)
-{
-    static unsigned char aCRCHi[] = {
+
+// Modbus RTU CRC-16 lookup tables 
+namespace {
+    constexpr uint8_t aCRCHi[256] = {
         0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
         0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
         0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
@@ -27,9 +26,26 @@ unsigned short CRC(unsigned char *pMessage, unsigned int NumberOfBytes)
         0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
         0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
         0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
-        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40,
+        0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41
     };
-    static unsigned char aCRCLo[] = {
+
+    constexpr uint8_t aCRCLo[256] = {
         0x00, 0xc0, 0xc1, 0x01, 0xc3, 0x03, 0x02, 0xc2,
         0xc6, 0x06, 0x07, 0xc7, 0x05, 0xc5, 0xc4, 0x04,
         0xcc, 0x0c, 0x0d, 0xcd, 0x0f, 0xcf, 0xce, 0x0e,
@@ -45,98 +61,126 @@ unsigned short CRC(unsigned char *pMessage, unsigned int NumberOfBytes)
         0x28, 0xe8, 0xe9, 0x29, 0xeb, 0x2b, 0x2a, 0xea,
         0xee, 0x2e, 0x2f, 0xef, 0x2d, 0xed, 0xec, 0x2c,
         0xe4, 0x24, 0x25, 0xe5, 0x27, 0xe7, 0xe6, 0x26,
-        0x22, 0xe2, 0xe3, 0x23, 0xe1, 0x21, 0x20, 0xe0
+        0x22, 0xe2, 0xe3, 0x23, 0xe1, 0x21, 0x20, 0xe0,
+        0xa0, 0x60, 0x61, 0xa1, 0x63, 0xa3, 0xa2, 0x62,
+        0x66, 0xa6, 0xa7, 0x67, 0xa5, 0x65, 0x64, 0xa4,
+        0x6c, 0xac, 0xad, 0x6d, 0xaf, 0x6f, 0x6e, 0xae,
+        0xaa, 0x6a, 0x6b, 0xab, 0x69, 0xa9, 0xa8, 0x68,
+        0x78, 0xb8, 0xb9, 0x79, 0xbb, 0x7b, 0x7a, 0xba,
+        0xbe, 0x7e, 0x7f, 0xbf, 0x7d, 0xbd, 0xbc, 0x7c,
+        0xb4, 0x74, 0x75, 0xb5, 0x77, 0xb7, 0xb6, 0x76,
+        0x72, 0xb2, 0xb3, 0x73, 0xb1, 0x71, 0x70, 0xb0,
+        0x50, 0x90, 0x91, 0x51, 0x93, 0x53, 0x52, 0x92,
+        0x96, 0x56, 0x57, 0x97, 0x55, 0x95, 0x94, 0x54,
+        0x9c, 0x5c, 0x5d, 0x9d, 0x5f, 0x9f, 0x9e, 0x5e,
+        0x5a, 0x9a, 0x9b, 0x5b, 0x99, 0x59, 0x58, 0x98,
+        0x88, 0x48, 0x49, 0x89, 0x4b, 0x8b, 0x8a, 0x4a,
+        0x4e, 0x8e, 0x8f, 0x4f, 0x8d, 0x4d, 0x4c, 0x8c,
+        0x44, 0x84, 0x85, 0x45, 0x87, 0x47, 0x46, 0x86,
+        0x82, 0x42, 0x43, 0x83, 0x41, 0x81, 0x80, 0x40
     };
+}
 
-    unsigned char HiByte = 0xFF;
-    unsigned char LoByte = 0xFF;
-    unsigned char Index;
+
+
+// Optimized CRC Modbus RTU calculation
+[[gnu::always_inline]]
+inline uint16_t CRC(const uint8_t * __restrict__ pMessage, size_t NumberOfBytes) noexcept
+{
+    uint8_t HiByte = 0xFF;
+    uint8_t LoByte = 0xFF;
 
     while (NumberOfBytes--)
     {
-        Index = HiByte ^ *pMessage++;
+        const uint8_t Index = HiByte ^ *pMessage++;
         HiByte = LoByte ^ aCRCHi[Index];
         LoByte = aCRCLo[Index];
     }
-    return (HiByte << 8 | LoByte);
+    
+    return (static_cast<uint16_t>(HiByte) << 8) | LoByte;
 }
 
-// --------------------------------------------------------------
-// Pomocnicza funkcja: parsowanie sekwencji bajtów hex
-// --------------------------------------------------------------
-vector<unsigned char> parseHexSequence(const string &input)
+
+// Helper function: parse hex byte sequence
+bool parseHexSequence(const string &input, vector<uint8_t> &data)
 {
-    vector<unsigned char> data;
+    data.clear();
+    data.reserve(256);
     stringstream ss(input);
     string token;
+    
     while (ss >> token)
     {
-        if (token.size() % 2 != 0) token = "0" + token;
+        if (token.size() % 2 != 0) 
+            token = "0" + token;
+            
         for (size_t i = 0; i < token.size(); i += 2)
         {
             unsigned int byteVal;
-            string byteStr = token.substr(i, 2);
+            const string byteStr = token.substr(i, 2);
             stringstream hexByte(byteStr);
             hexByte >> hex >> byteVal;
-            data.push_back(static_cast<unsigned char>(byteVal));
+            data.push_back(static_cast<uint8_t>(byteVal));
+            
             if (data.size() >= 256)
-                throw runtime_error("Zbyt długa sekwencja (>256 bajtów)");
+            {
+                cerr << "Blad: Zbyt dluga sekwencja (>256 bajtow)\n";
+                return false;
+            }
         }
     }
-    return data;
+    return true;
 }
 
-// --------------------------------------------------------------
-// Główna część programu
-// --------------------------------------------------------------
+
 int main()
 {
-    try
+    cout << "Podaj sekwencje bajtow w HEX (np. 01 10 0011 0003 06 1AC4 BAD0):\n> ";
+    string line;
+    getline(cin, line);
+
+    vector<uint8_t> bytes;
+    if (!parseHexSequence(line, bytes))
     {
-        cout << "Podaj sekwencje bajtow w HEX (np. 01 10 0011 0003 06 1AC4 BAD0):\n> ";
-        string line;
-        getline(cin, line);
-
-        vector<unsigned char> bytes = parseHexSequence(line);
-        if (bytes.empty())
-        {
-            cerr << "Brak danych do obliczenia CRC!\n";
-            return 1;
-        }
-
-        cout << "Podaj liczbe powtorzen algorytmu [1..1000000000]: ";
-        unsigned long long n;
-        cin >> n;
-        if (n < 1 || n > 1000000000ULL)
-        {
-            cerr << "Nieprawidlowa liczba powtorzen.\n";
-            return 1;
-        }
-
-        auto start = chrono::high_resolution_clock::now();
-
-        unsigned short crc = 0;
-        for (unsigned long long i = 0; i < n; ++i)
-        {
-            crc = CRC(bytes.data(), bytes.size());
-        }
-
-        auto end = chrono::high_resolution_clock::now();
-        chrono::duration<double> duration = end - start;
-
-        unsigned char crcHi = (crc >> 8) & 0xFF;
-        unsigned char crcLo = crc & 0xFF;
-
-        cout << "\nCRC (po " << n << " powtorzeniach): "
-             << hex << uppercase << setw(2) << setfill('0') << (int)crcHi << " "
-             << setw(2) << setfill('0') << (int)crcLo << endl;
-        cout << "Czas realizacji: " << dec << duration.count() << " s\n";
+        return 1;
     }
-    catch (exception &e)
+    
+    if (bytes.empty())
     {
-        cerr << "Blad: " << e.what() << endl;
+        cerr << "Brak danych do obliczenia CRC!\n";
+        return 1;
     }
 
+    cout << "Podaj liczbe powtorzen algorytmu [1..1000000000]: ";
+    uint64_t n {};
+    cin >> n;
+    if (n < 1 || n > 1000000000ULL)
+    {
+        cerr << "Nieprawidlowa liczba powtorzen.\n";
+        return 1;
+    }
+
+    const uint8_t* const dataPtr = bytes.data();
+    const size_t dataSize = bytes.size();
+
+    const auto start = chrono::high_resolution_clock::now();
+
+    uint16_t crc {0};
+    for (uint64_t i = 0; i < n; ++i)
+    {
+        crc = CRC(dataPtr, dataSize);
+    }
+
+    const auto end = chrono::high_resolution_clock::now();
+    const chrono::duration<double> duration = end - start;
+
+    const uint8_t crcHi = (crc >> 8) & 0xFF;
+    const uint8_t crcLo = crc & 0xFF;
+
+    cout << "\nCRC (po " << dec << n << " powtorzeniach): "
+         << hex << uppercase << setw(2) << setfill('0') << static_cast<int>(crcHi) << " "
+         << setw(2) << setfill('0') << static_cast<int>(crcLo) << dec << endl;
+    cout << "Czas realizacji: " << fixed << setprecision(6) << duration.count() << " s\n";
+    
     return 0;
 }
-
