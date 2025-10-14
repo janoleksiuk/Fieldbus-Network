@@ -1,4 +1,6 @@
-# Fieldbus Network 
+# Fieldbus networks
+
+Tasks/Projects from WUT course "Fieldbus Networks Design"
 
 ---
 
