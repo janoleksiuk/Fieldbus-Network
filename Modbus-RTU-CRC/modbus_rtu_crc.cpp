@@ -84,11 +84,10 @@ namespace {
 
 
 // Optimized CRC Modbus RTU calculation
-[[gnu::always_inline]]
-inline uint16_t CRC(const uint8_t * __restrict__ pMessage, size_t NumberOfBytes) noexcept
+constexpr uint16_t CRC(const uint8_t * pMessage, size_t NumberOfBytes) noexcept
 {
-    uint8_t HiByte = 0xFF;
-    uint8_t LoByte = 0xFF;
+    uint8_t HiByte {0xFF};
+    uint8_t LoByte {0xFF};
 
     while (NumberOfBytes--)
     {
@@ -114,10 +113,10 @@ bool parseHexSequence(const string &input, vector<uint8_t> &data)
         if (token.size() % 2 != 0) 
             token = "0" + token;
             
-        for (size_t i = 0; i < token.size(); i += 2)
+        for (size_t i {0}; i < token.size(); i += 2)
         {
             unsigned int byteVal;
-            const string byteStr = token.substr(i, 2);
+            const string byteStr {token.substr(i, 2)};
             stringstream hexByte(byteStr);
             hexByte >> hex >> byteVal;
             data.push_back(static_cast<uint8_t>(byteVal));
@@ -160,19 +159,19 @@ int main()
         return 1;
     }
 
-    const uint8_t* const dataPtr = bytes.data();
-    const size_t dataSize = bytes.size();
+    const uint8_t* const dataPtr {bytes.data()};
+    const size_t dataSize {bytes.size()};
 
     const auto start = chrono::high_resolution_clock::now();
 
     uint16_t crc {0};
-    for (uint64_t i = 0; i < n; ++i)
+    for (uint64_t i {0}; i < n; ++i)
     {
         crc = CRC(dataPtr, dataSize);
     }
 
-    const auto end = chrono::high_resolution_clock::now();
-    const chrono::duration<double> duration = end - start;
+    const auto end {chrono::high_resolution_clock::now()};
+    const chrono::duration<double> duration {end - start};
 
     const uint8_t crcHi = (crc >> 8) & 0xFF;
     const uint8_t crcLo = crc & 0xFF;
